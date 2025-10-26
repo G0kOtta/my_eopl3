@@ -70,15 +70,35 @@
                       val
                       (apply-env saved-env search-sym)))
       (extend-env-rec (p-name b-vars p-body saved-env)
-                      (if (eqv? search-sym p-name)
-                          (proc-val (procedure b-vars p-body env))          
-                          (apply-env saved-env search-sym))))))
+                      (let loop ((current-env env))
+                        (cases environment current-env
+                          (extend-env-rec (n vars body s-env)
+                                          (if (eqv? search-sym n)
+                                              (proc-val (procedure vars body env)) 
+                                              (loop s-env)))
+                          (else
+                            (apply-env saved-env search-sym))))))))
 
 (define value-of-program 
   (lambda (pgm)
     (cases program pgm
       (a-program (exp1)
                  (value-of exp1 (init-env))))))
+
+(define extend-env-rec*
+  (lambda (names vars bodys env)
+    (if (null? names)
+        env
+        (extend-env-rec
+         (car names)
+         (car vars)
+         (car bodys)
+         (extend-env-rec*
+          (cdr names)
+          (cdr vars)
+          (cdr bodys)
+          env)))))
+
 
 (define value-of
   (lambda (exp env)
@@ -122,9 +142,9 @@
                       (arg (map (lambda (x) (value-of x env)) rands)))
                   (apply-procedure proc arg)))
 
-      (letrec-exp (p-name b-vars p-body letrec-body)
+      (letrec-exp (p-names b-vars p-bodys letrec-body)
                   (value-of letrec-body
-                            (extend-env-rec p-name b-vars p-body env)))
+                            (extend-env-rec* p-names b-vars p-bodys env)))
 
       )))
 
@@ -185,7 +205,7 @@
 
     (expression
      ("letrec"
-      identifier "(" (separated-list identifier ",") ")" "=" expression
+      (arbno identifier "(" (separated-list identifier ",") ")" "=" expression)
       "in" expression)
      letrec-exp)
       
@@ -206,3 +226,11 @@
 (define run
   (lambda (string)
     (value-of-program (scan&parse string))))
+
+;;;test
+;;;(run "
+#| letrec
+     f(x, y) = if zero?(x) then y else (g y -(x, 1))
+     g(a, b) = if zero?(a) then b else (f b -(a, 1))
+   in
+  (f 3 5) |#
